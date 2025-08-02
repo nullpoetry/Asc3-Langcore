@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Cyberweave</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0d1e;
+            color: #e0e7ff;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        canvas {
+            display: block;
+            touch-action: none; /* Prevent browser touch gestures */
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="container mx-auto p-4 md:p-8 flex flex-col items-center justify-center min-h-screen">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-center w-full max-w-7xl">
+            <!-- Left Side: Controls -->
+            <div class="w-full md:w-1/3 p-4 md:p-6 bg-slate-900 bg-opacity-70 rounded-xl shadow-lg border border-slate-700 md:mr-6 mb-6 md:mb-0">
+                <h1 class="text-3xl md:text-4xl font-bold mb-2 text-cyan-400">Dynamic Cyberweave</h1>
+                <p class="text-slate-400 mb-6 text-sm md:text-base">An interactive 3D grid that responds to your touch and mouse movements.</p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label for="speed" class="block text-sm font-medium text-slate-300">Animation Speed</label>
+                        <input type="range" id="speed" min="0.01" max="0.1" step="0.01" value="0.05" class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-slate-700 accent-cyan-400 mt-1">
+                    </div>
+                    <div>
+                        <label for="depth" class="block text-sm font-medium text-slate-300">Grid Depth</label>
+                        <input type="range" id="depth" min="5" max="25" step="1" value="15" class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-slate-700 accent-cyan-400 mt-1">
+                    </div>
+                    <div>
+                        <label for="perspective" class="block text-sm font-medium text-slate-300">Perspective</label>
+                        <input type="range" id="perspective" min="0" max="1" step="0.05" value="0.5" class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-slate-700 accent-cyan-400 mt-1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Canvas -->
+            <div class="w-full md:w-2/3 p-4 bg-slate-900 bg-opacity-70 rounded-xl shadow-lg border border-slate-700 flex items-center justify-center">
+                <canvas id="cyberweaveCanvas" class="w-full rounded-lg"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('cyberweaveCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // UI elements
+            const speedInput = document.getElementById('speed');
+            const depthInput = document.getElementById('depth');
+            const perspectiveInput = document.getElementById('perspective');
+            
+            let mouseX = window.innerWidth / 2;
+            let mouseY = window.innerHeight / 2;
+            let lastMouseX = mouseX;
+            let lastMouseY = mouseY;
+            
+            // Canvas dimensions and resizing
+            function resizeCanvas() {
+                canvas.width = canvas.parentElement.offsetWidth;
+                canvas.height = Math.min(600, window.innerHeight * 0.7);
+            }
+            
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            // Core Cyberweave class
+            class Cyberweave {
+                constructor(options) {
+                    this.width = 16;
+                    this.height = 16;
+                    this.depth = parseInt(depthInput.value, 10);
+                    this.cell_size = 20;
+                    this.perspective_factor = parseFloat(perspectiveInput.value);
+                    this.animation_speed = parseFloat(speedInput.value);
+                    this.nodes = [];
+                    this.time = 0;
+                    
+                    this.initNodes();
+                }
+
+                initNodes() {
+                    this.nodes = [];
+                    const halfW = this.width / 2;
+                    const halfH = this.height / 2;
+                    const halfD = this.depth / 2;
+
+                    for (let i = 0; i <= this.width; i++) {
+                        for (let j = 0; j <= this.height; j++) {
+                            for (let k = 0; k <= this.depth; k++) {
+                                const x = (i - halfW) * this.cell_size;
+                                const y = (j - halfH) * this.cell_size;
+                                const z = (k - halfD) * this.cell_size;
+                                this.nodes.push({ x, y, z, originalZ: z });
+                            }
+                        }
+                    }
+                }
+
+                update(deltaTime) {
+                    this.time += deltaTime * this.animation_speed;
+
+                    // Update node positions with gentle sine wave motion
+                    this.nodes.forEach(node => {
+                        const distToMouse = Math.sqrt(
+                            Math.pow(node.projectedX - mouseX, 2) + 
+                            Math.pow(node.projectedY - mouseY, 2)
+                        );
+                        
+                        // Mouse interaction effect
+                        const influenceRadius = 150;
+                        const influenceFactor = Math.max(0, 1 - distToMouse / influenceRadius);
+                        const pushForceX = (node.projectedX - mouseX) * influenceFactor * 0.5;
+                        const pushForceY = (node.projectedY - mouseY) * influenceFactor * 0.5;
+
+                        // Base animation
+                        const animX = Math.sin(node.y * 0.01 + this.time) * 10;
+                        const animY = Math.cos(node.x * 0.01 + this.time) * 10;
+                        const animZ = Math.sin(node.z * 0.01 + this.time) * 5;
+
+                        node.x_mod = animX;
+                        node.y_mod = animY;
+                        node.z_mod = animZ;
+                    });
+                }
+                
+                project(x, y, z) {
+                    const perspective = this.perspective_factor;
+                    const scale = 1 - (z / (this.depth * this.cell_size)) * perspective;
+                    const screenX = canvas.width / 2 + x * scale;
+                    const screenY = canvas.height / 2 + y * scale;
+                    return { x: screenX, y: screenY, scale };
+                }
+
+                draw() {
+                    // Clear canvas
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    const center = { x: canvas.width / 2, y: canvas.height / 2 };
+                    const halfW = this.width / 2;
+                    const halfH = this.height / 2;
+                    const halfD = this.depth / 2;
+
+                    // Draw lines
+                    for (let i = 0; i <= this.width; i++) {
+                        for (let j = 0; j <= this.height; j++) {
+                            for (let k = 0; k <= this.depth; k++) {
+                                const nodeIndex = i * (this.height + 1) * (this.depth + 1) + j * (this.depth + 1) + k;
+                                const node = this.nodes[nodeIndex];
+                                
+                                const p = this.project(node.x + node.x_mod, node.y + node.y_mod, node.originalZ + node.z_mod);
+                                node.projectedX = p.x;
+                                node.projectedY = p.y;
+                                
+                                // Draw connections
+                                // To the right (x-axis)
+                                if (i < this.width) {
+                                    const nextNodeIndex = (i + 1) * (this.height + 1) * (this.depth + 1) + j * (this.depth + 1) + k;
+                                    const nextNode = this.nodes[nextNodeIndex];
+                                    const p2 = this.project(nextNode.x + nextNode.x_mod, nextNode.y + nextNode.y_mod, nextNode.originalZ + nextNode.z_mod);
+                                    this.drawLine(p.x, p.y, p2.x, p2.y, p.scale, 'rgba(0, 180, 255, 0.4)');
+                                }
+                                // Down (y-axis)
+                                if (j < this.height) {
+                                    const nextNodeIndex = i * (this.height + 1) * (this.depth + 1) + (j + 1) * (this.depth + 1) + k;
+                                    const nextNode = this.nodes[nextNodeIndex];
+                                    const p2 = this.project(nextNode.x + nextNode.x_mod, nextNode.y + nextNode.y_mod, nextNode.originalZ + nextNode.z_mod);
+                                    this.drawLine(p.x, p.y, p2.x, p2.y, p.scale, 'rgba(255, 0, 180, 0.4)');
+                                }
+                                // Backwards (z-axis)
+                                if (k < this.depth) {
+                                    const nextNodeIndex = i * (this.height + 1) * (this.depth + 1) + j * (this.depth + 1) + (k + 1);
+                                    const nextNode = this.nodes[nextNodeIndex];
+                                    const p2 = this.project(nextNode.x + nextNode.x_mod, nextNode.y + nextNode.y_mod, nextNode.originalZ + nextNode.z_mod);
+                                    this.drawLine(p.x, p.y, p2.x, p2.y, p.scale, 'rgba(180, 255, 0, 0.4)');
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Draw nodes on top
+                    this.nodes.forEach(node => {
+                        const distToMouse = Math.sqrt(
+                            Math.pow(node.projectedX - lastMouseX, 2) + 
+                            Math.pow(node.projectedY - lastMouseY, 2)
+                        );
+                        
+                        const influenceRadius = 150;
+                        const influenceFactor = Math.max(0, 1 - distToMouse / influenceRadius);
+                        const pointSize = 2 + influenceFactor * 5;
+
+                        // Node color change on hover
+                        const colorMix = 255 * (1 - influenceFactor);
+                        const red = 255;
+                        const green = 165 + (255 - 165) * influenceFactor;
+                        const blue = 0;
+                        const alpha = 0.8 + 0.2 * influenceFactor;
+                        const nodeColor = `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+
+                        this.drawNode(node.projectedX, node.projectedY, pointSize, nodeColor);
+                    });
+                }
+                
+                drawLine(x1, y1, x2, y2, scale, color) {
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.lineWidth = 1 * scale;
+                    ctx.strokeStyle = color;
+                    ctx.stroke();
+                }
+
+                drawNode(x, y, size, color) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                }
+            }
+
+            // Main application loop
+            let lastTime = 0;
+            const cyberweave = new Cyberweave();
+
+            function animate(timestamp) {
+                const deltaTime = timestamp - lastTime;
+                lastTime = timestamp;
+                
+                // Update parameters from UI
+                cyberweave.animation_speed = parseFloat(speedInput.value);
+                cyberweave.perspective_factor = parseFloat(perspectiveInput.value);
+                const newDepth = parseInt(depthInput.value, 10);
+                if (newDepth !== cyberweave.depth) {
+                    cyberweave.depth = newDepth;
+                    cyberweave.initNodes();
+                }
+
+                cyberweave.update(deltaTime / 1000);
+                cyberweave.draw();
+                requestAnimationFrame(animate);
+            }
+            
+            // Mouse and touch events
+            const updateMousePosition = (x, y) => {
+                const rect = canvas.getBoundingClientRect();
+                lastMouseX = x - rect.left;
+                lastMouseY = y - rect.top;
+            };
+
+            canvas.addEventListener('mousemove', (e) => updateMousePosition(e.clientX, e.clientY));
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault(); // Prevent scrolling
+                updateMousePosition(e.touches[0].clientX, e.touches[0].clientY);
+            });
+            canvas.addEventListener('mouseleave', () => {
+                lastMouseX = -1;
+                lastMouseY = -1;
+            });
+            canvas.addEventListener('touchend', () => {
+                lastMouseX = -1;
+                lastMouseY = -1;
+            });
+
+            // Start the animation on window load
+            window.onload = function() {
+                requestAnimationFrame(animate);
+            };
+        });
+    </script>
+</body>
+</html>
