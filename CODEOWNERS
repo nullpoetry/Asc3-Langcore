@@ -1,0 +1,21 @@
+# This file is for enforcing a strict review policy.
+# The user or team listed on the right must approve pull requests
+# that modify files matching the pattern on the left.
+
+# A designated team must review all changes to the core symbolic language
+# and the main scripts.
+/asc3.py        @your-github-username
+/paper3d.py     @your-github-username
+/README.md      @your-github-username
+
+# The team must also review all documentation and configuration files.
+/.gitignore     @your-github-username
+/package.json   @your-github-username
+/PULL_REQUEST_TEMPLATE.md @your-github-username
+
+# To add a team, use the format @org-name/team-name
+# e.g., @my-organization/core-team
+
+# To designate a single owner for all files, you can use:
+# * @your-github-username
+
