@@ -1,0 +1,93 @@
+import firebase_admin
+from firebase_admin import firestore
+from firebase_admin import credentials
+from datetime import datetime
+
+# Import the Asc3Core from your existing code
+# Note: You'll need to make sure asc3.py is in the same directory or accessible
+# on the Python path. For a Firebase Function, you would place this file
+# in the same project directory as your main function file.
+from asc3 import Asc3Core
+
+# IMPORTANT: You must configure Firebase with your project credentials.
+# For a Firebase Function, the credentials are often handled automatically.
+# For local testing, you may need to specify a path to a service account JSON file.
+try:
+    firebase_config = {
+        # Your Firebase configuration details here.
+        # This is where you would place your credentials in a real-world scenario.
+        # For a function deployed to Firebase, this is handled automatically.
+    }
+    firebase_admin.initialize_app(firebase_admin.credentials.ApplicationDefault())
+    print("Firebase app initialized successfully.")
+except Exception as e:
+    print(f"Error initializing Firebase: {e}")
+    exitco()
+
+db = firestore.client()
+
+def generate_and_save_asc3_art(request):
+    """
+    A Firebase Function that generates a new piece of Asc3 art and saves it to Firestore.
+    This function will be triggered by an HTTP request.
+    
+    Args:
+        request (flask.Request): The HTTP request object.
+        <https://flask.palletsprojects.com/en/1.1.x/api/#flask.Request>
+    """
+    try:
+        # 1. Generate the Asc3 art using the core logic
+        core = Asc3Core(canvas_width=100, canvas_height=15)
+        
+        basic_art_font = {
+            'A': [ "  _  ", " / \\ ", "/___\\", "\\   /", " \\ / " ],
+            'S': [ " ____ ", "/ __ \\", "\\___ \\", " ____/", "/____/" ],
+            'C': [ "  ___ ", " / __|", "| (__ ", " \\___|", "     " ],
+            '3': [ " ____ ", "|___ \\", "  _  |", " ___/ ", "|____/" ]
+        }
+        
+        core.define_font("basic", basic_art_font)
+        
+        asc3_program = [
+            {'command': 'set_style', 'color': 'cyan', 'x': 5, 'y': 2},
+            {'command': 'write_text', 'font': 'basic', 'text': 'ASC'},
+            {'command': 'set_style', 'color': 'magenta', 'x': 45, 'y': 2},
+            {'command': 'write_text', 'font': 'basic', 'text': '3'}
+        ]
+
+        for cmd in asc3_program:
+            command_type = cmd.pop('command')
+            if command_type == 'set_style':
+                core.set_style(**cmd)
+            elif command_type == 'write_text':
+                core.write_text(cmd['font'], cmd['text'])
+
+        generated_art = core.render()
+
+        # 2. Prepare the data to be saved to Firestore
+        art_data = {
+            'title': 'Generated Asc3 Art',
+            'art': generated_art,
+            'createdAt': datetime.now(),
+            'keywords': ['asc3', 'ascii', 'generative', 'art']
+        }
+
+        # 3. Save the data to a new document in the 'asc3_designs' collection
+        doc_ref = db.collection('asc3_designs').document()
+        doc_ref.set(art_data)
+        
+        # 4. Return a success message
+        return {
+            "status": "success",
+            "message": "Successfully generated and saved ASC3 art to Firestore.",
+            "document_id": doc_ref.id
+        }
+
+    except Exception as e:
+        # Log any errors and return an error message
+        print(f"An error occurred: {e}")
+        return {
+            "status": "error",
+            "message": f"An error occurred: {e}"
+        }, 500
+
