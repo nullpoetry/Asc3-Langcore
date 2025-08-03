@@ -1,0 +1,141 @@
+import sys
+from typing import Dict, List, Tuple, Any
+
+class Asc3Core:
+    """
+    A symbolic language core for creating art fonts and designs.
+    
+    The core provides a simple interpreter for a language that can:
+    1. Define custom ASCII art fonts.
+    2. Set rendering styles (e.g., color).
+    3. Write text to a virtual canvas.
+    4. Render the final canvas output as a single string.
+    """
+
+    def __init__(self, canvas_width: int = 80, canvas_height: int = 20):
+        """
+        Initializes the Asc3Core with a virtual canvas.
+
+        Args:
+            canvas_width (int): The width of the rendering canvas in characters.
+            canvas_height (int): The height of the rendering canvas in characters.
+        """
+        self.width = canvas_width
+        self.height = canvas_height
+        self.canvas = [[' ' for _ in range(self.width)] for _ in range(self.height)]
+        self.fonts: Dict[str, Dict[str, List[str]]] = {}
+        self.current_style: Dict[str, Any] = {
+            'color': 'white',
+            'x': 0,
+            'y': 0
+        }
+        self.supported_colors = {
+            'red': '\033[91m',
+            'green': '\033[92m',
+            'yellow': '\033[93m',
+            'blue': '\033[94m',
+            'magenta': '\033[95m',
+            'cyan': '\033[96m',
+            'white': '\033[97m',
+            'reset': '\033[0m'
+        }
+
+    def define_font(self, font_name: str, font_map: Dict[str, List[str]]):
+        """
+        Defines a new font with a given name and character map.
+        """
+        if font_name in self.fonts:
+            print(f"Warning: Font '{font_name}' already exists. Overwriting.", file=sys.stderr)
+        self.fonts[font_name] = font_map
+        print(f"Font '{font_name}' defined successfully.")
+
+    def set_style(self, **kwargs):
+        """
+        Sets the current rendering style.
+        """
+        for key, value in kwargs.items():
+            if key in self.current_style:
+                self.current_style[key] = value
+                print(f"Style '{key}' set to '{value}'.")
+            else:
+                print(f"Warning: Unsupported style property '{key}'.", file=sys.stderr)
+
+    def write_text(self, font_name: str, text: str):
+        """
+        Renders a string of text on the canvas using a specified font and
+        the current style.
+        """
+        if font_name not in self.fonts:
+            print(f"Error: Font '{font_name}' not found.", file=sys.stderr)
+            return
+
+        font = self.fonts[font_name]
+        start_x = self.current_style['x']
+        start_y = self.current_style['y']
+        
+        color = self.supported_colors.get(self.current_style.get('color', 'white'), '\033[97m')
+        reset = self.supported_colors['reset']
+
+        current_x = start_x
+        for char in text:
+            char_art = font.get(char.upper())
+            if not char_art:
+                print(f"Warning: Character '{char}' not found in font '{font_name}'. Skipping.", file=sys.stderr)
+                char_width = 5
+                current_x += char_width
+                continue
+
+            char_height = len(char_art)
+            char_width = len(char_art[0])
+
+            for i in range(char_height):
+                if start_y + i < 0 or start_y + i >= self.height:
+                    continue
+                
+                line = char_art[i]
+                for j in range(len(line)):
+                    if current_x + j >= 0 and current_x + j < self.width:
+                        self.canvas[start_y + i][current_x + j] = color + line[j] + reset
+            
+            current_x += char_width + 1
+
+    def render(self) -> str:
+        """
+        Renders the entire canvas as a single string.
+        """
+        return "\n".join("".join(row) for row in self.canvas)
+
+# Demonstration of the asc3 symbolic language core
+if __name__ == "__main__":
+    core = Asc3Core(canvas_width=100, canvas_height=15)
+    
+    basic_art_font = {
+        'A': [ "  _  ", " / \\ ", "/___\\", "\\   /", " \\ / " ],
+        'S': [ " ____ ", "/ __ \\", "\\___ \\", " ____/", "/____/" ],
+        'C': [ "  ___ ", " / __|", "| (__ ", " \\___|", "     " ],
+        '3': [ " ____ ", "|___ \\", "  _  |", " ___/ ", "|____/" ]
+    }
+    
+    core.define_font("basic", basic_art_font)
+    
+    asc3_program = [
+        {'command': 'set_style', 'color': 'cyan', 'x': 5, 'y': 2},
+        {'command': 'write_text', 'font': 'basic', 'text': 'ASC'},
+        {'command': 'set_style', 'color': 'magenta', 'x': 45, 'y': 2},
+        {'command': 'write_text', 'font': 'basic', 'text': '3'}
+    ]
+
+    print("\n--- Executing Asc3 Program ---")
+    for cmd in asc3_program:
+        command_type = cmd.pop('command')
+        if command_type == 'set_style':
+            core.set_style(**cmd)
+        elif command_type == 'write_text':
+            core.write_text(cmd['font'], cmd['text'])
+        else:
+            print(f"Unknown command: {command_type}", file=sys.stderr)
+
+    print("\n--- Final Render ---")
+    final_output = core.render()
+    print(final_output)
+    print("\n--- Render Complete ---")
